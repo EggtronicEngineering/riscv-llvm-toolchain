@@ -1,0 +1,68 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Deps
+RUN apt-get update && apt-get install -y \
+        git \
+        zip \
+        bzip2 \
+        xz-utils \
+        unzip \
+        wget \
+        curl \
+        rsync \
+        gcc \
+        g++ \
+        libstdc++6 \
+        make \
+        autoconf \
+        automake \
+        autotools-dev \
+        python3 \
+        python3-dev \
+        python3-pip \
+        libmpc-dev \
+        libmpfr-dev \
+        libgmp-dev \
+        gawk \
+        build-essential \
+        bison \
+        flex \
+        texinfo \
+        texlive \
+        gperf \
+        libtool \
+        libtool-bin \
+        patch \
+        patchutils \
+        bc \
+        zlib1g-dev \
+        libexpat-dev \
+        help2man \
+        libncurses5-dev \
+        meson \
+        ninja-build \
+        mingw-w64 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Crosstool-NG Setup
+RUN pip3 install meson
+
+RUN git config --global user.name "CI Bot" \
+    && git config --global user.email ci@example.com
+RUN git clone -b crosstool-ng-1.26.0 https://github.com/crosstool-ng/crosstool-ng.git /tmp/ctng \
+    && cd /tmp/ctng \
+    && git cherry-pick a0bf704 b9e57eb 901722d \
+    && ./bootstrap \
+    && ./configure --prefix=/usr \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/ctng
+
+# User Setup
+ARG CTNG_UID=1000
+ARG CTNG_GID=1000
+RUN groupadd -g $CTNG_GID ctng
+RUN useradd -d /home/ctng -m -g $CTNG_GID -u $CTNG_UID -s /bin/bash ctng
+USER ctng

@@ -1,0 +1,18 @@
+FROM ubuntu:24.04
+
+ARG TARGETARCH
+ARG INSTALL_DIR=/opt/riscv
+
+# Install deps
+RUN apt update && apt -y full-upgrade && apt -y install \
+        make \
+        libmpc3 \
+        libmpfr6 \
+        libgmp10 \
+        zlib1g \
+        libexpat1 \
+    && apt clean && rm -rf /var/lib/apt/lists/*
+
+# Install toolchain
+COPY linux_${TARGETARCH} $INSTALL_DIR
+ENV PATH="$INSTALL_DIR/bin:$PATH"
