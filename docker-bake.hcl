@@ -5,7 +5,7 @@ variable "WINDOWS_BUILDER_IMAGE" {}
 variable "CI_COMMIT_TAG" {}
 
 group "builders" {
-  targets = ["linux-builder", "windows-builder"]
+  targets = ["linux-builder"]
 }
 
 group "release" {
@@ -19,15 +19,6 @@ target "linux-builder" {
   tags = ["${LINUX_BUILDER_IMAGE}"]
   cache-from = ["type=registry,ref=${LINUX_BUILDER_IMAGE}-cache"]
   cache-to   = ["type=registry,ref=${LINUX_BUILDER_IMAGE}-cache,mode=max"]
-}
-
-target "windows-builder" {
-  context = "docker/builders"
-  dockerfile = "Dockerfile.windows-builder"
-  output = ["type=registry"]
-  tags = ["${WINDOWS_BUILDER_IMAGE}"]
-  cache-from = ["type=registry,ref=${WINDOWS_BUILDER_IMAGE}-cache"]
-  cache-to   = ["type=registry,ref=${WINDOWS_BUILDER_IMAGE}-cache,mode=max"]
 }
 
 target "toolchain-release" {

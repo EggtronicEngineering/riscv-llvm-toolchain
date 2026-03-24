@@ -10,7 +10,6 @@ variables:
 
   DOCKER_REPO: "eggtronicengineering/riscv-llvm-toolchain"
   LINUX_BUILDER_IMAGE: "${DOCKER_REPO}:linux-builder"
-  WINDOWS_BUILDER_IMAGE: "${DOCKER_REPO}:windows-builder"
   RELEASE_IMAGE: "registry.gitlab.com/gitlab-org/release-cli:latest"
 
   PROJECT_API_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}"
@@ -169,8 +168,6 @@ linux_riscv64:build:
 
 win_x64:build:
   extends: .build
-  image:
-    name: $WINDOWS_BUILDER_IMAGE
   variables:
     RELEASE_NAME: "$WIN_X64_RELEASE_NAME"
     ZIP_NAME: "$WIN_X64_ARCHIVE_NAME"
