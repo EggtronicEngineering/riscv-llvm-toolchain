@@ -79,21 +79,19 @@ clone_tc:
   stage: setup
   image:
     name: $LINUX_BUILDER_IMAGE
-    docker:
-      user: ctng
   variables:
     GIT_STRATEGY: none
   <<: *semver_tag_rules
   script:
     # Defensive cleanup: Wipe out any leftover folders from previous failed retries (needed because of `GIT_STRATEGY: none`)
-    - rm -rf corev-llvm-project
+    - rm -rf llvm-project
     # Clone OpenHW LLVM
-    - git clone https://github.com/openhwgroup/corev-llvm-project.git
+    - git clone --single-branch --branch $TOOLCHAIN_REF $LLVM_REPO llvm-project
     # Cleanup git metadata to save CI artifact space
-    - rm -rf corev-llvm-project/.git
+    - rm -rf llvm-project/.git
   artifacts:
     paths:
-      - corev-llvm-project
+      - llvm-project
     expire_in: 1 day
     when: always
   tags:
@@ -109,7 +107,7 @@ clone_tc:
     ZIP_NAME: ""
   <<: *semver_tag_rules
   script:
-    - cd corev-llvm-project
+    - cd llvm-project
     - mkdir build && cd build
     # Build
     - |
