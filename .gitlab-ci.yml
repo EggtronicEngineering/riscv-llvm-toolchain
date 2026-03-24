@@ -1,0 +1,288 @@
+variables:
+  GIT_DEPTH: 1
+  GIT_STRATEGY: clone
+  GIT_SUBMODULE_STRATEGY: none
+  GIT_SUBMODULE_FORCE_HTTPS: "true"
+  DOCKER_DRIVER: overlay2
+
+  LLVM_REPO: "https://github.com/openhwgroup/corev-llvm-project.git"
+  TOOLCHAIN_REF: "development"
+
+  DOCKER_REPO: "eggtronicengineering/riscv-llvm-toolchain"
+  LINUX_BUILDER_IMAGE: "${DOCKER_REPO}:linux-builder"
+  WINDOWS_BUILDER_IMAGE: "${DOCKER_REPO}:windows-builder"
+  RELEASE_IMAGE: "registry.gitlab.com/gitlab-org/release-cli:latest"
+
+  PROJECT_API_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}"
+  PACKAGE_REGISTRY_URL: "${PROJECT_API_URL}/packages/generic/binaries/${CI_COMMIT_TAG}"
+  CONTAINER_REGISTRY_URL: "${PROJECT_API_URL}/registry/repositories"
+
+  RELEASE_BASE_NAME: "riscv-llvm-toolchain"
+  LINUX_X64_ARTIFACT_TAIL: linux_x64
+  LINUX_RISCV64_ARTIFACT_TAIL: linux_riscv64
+  WIN_X64_ARTIFACT_TAIL: win_x64
+
+  LINUX_X64_BASE_NAME: "${RELEASE_BASE_NAME}-${LINUX_X64_ARTIFACT_TAIL}"
+  LINUX_X64_RELEASE_NAME: "${LINUX_X64_BASE_NAME}-${CI_COMMIT_TAG}"
+  LINUX_X64_ARCHIVE_NAME: "${LINUX_X64_RELEASE_NAME}.zip"
+
+  LINUX_RISCV64_BASE_NAME: "${RELEASE_BASE_NAME}-${LINUX_RISCV64_ARTIFACT_TAIL}"
+  LINUX_RISCV64_RELEASE_NAME: "${LINUX_RISCV64_BASE_NAME}-${CI_COMMIT_TAG}"
+  LINUX_RISCV64_ARCHIVE_NAME: "${LINUX_RISCV64_RELEASE_NAME}.zip"
+
+  WIN_X64_BASE_NAME: "${RELEASE_BASE_NAME}-${WIN_X64_ARTIFACT_TAIL}"
+  WIN_X64_RELEASE_NAME: "${WIN_X64_BASE_NAME}-${CI_COMMIT_TAG}"
+  WIN_X64_ARCHIVE_NAME: "${WIN_X64_RELEASE_NAME}.zip"
+
+
+stages:
+  - setup
+  - build_bin
+  - build_img
+  - release
+
+
+.semver_tag_rules: &semver_tag_rules
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
+
+
+.dockerbashlogin:
+  before_script:
+    - mkdir "$CI_PROJECT_DIR/.docker"
+    - echo $DOCKER_AUTH_CONFIG > "$CI_PROJECT_DIR/.docker/config.json"
+    - shopt -s expand_aliases
+    - alias docker="docker --config \"$CI_PROJECT_DIR/.docker\""
+    - export BUILDER_NAME="ci-builder-${CI_JOB_ID}"
+    - docker buildx create --name $BUILDER_NAME --driver docker-container --bootstrap --use || docker buildx use ci-builder
+  after_script:
+    - export DOCKER_CONFIG="$CI_PROJECT_DIR/.docker"
+    - export BUILDER_NAME="ci-builder-${CI_JOB_ID}"
+    - docker buildx use default
+    - docker --config "$DOCKER_CONFIG" buildx rm $BUILDER_NAME --force || true
+  tags:
+    - shell
+
+
+setup:
+  extends: .dockerbashlogin
+  stage: setup
+  variables:
+    DOCKER_BUILD_CONTEXT: .
+  only:
+    changes:
+      - docker/**/*
+      - docker-bake.hcl
+  script:
+    - docker buildx bake builders
+
+clone_tc:
+  stage: setup
+  image:
+    name: $LINUX_BUILDER_IMAGE
+    docker:
+      user: ctng
+  variables:
+    GIT_STRATEGY: none
+  <<: *semver_tag_rules
+  script:
+    # Defensive cleanup: Wipe out any leftover folders from previous failed retries (needed because of `GIT_STRATEGY: none`)
+    - rm -rf corev-llvm-project
+    # Clone OpenHW LLVM
+    - git clone https://github.com/openhwgroup/corev-llvm-project.git
+    # Cleanup git metadata to save CI artifact space
+    - rm -rf corev-llvm-project/.git
+  artifacts:
+    paths:
+      - corev-llvm-project
+    expire_in: 1 day
+    when: always
+  tags:
+    - docker
+
+
+.build:
+  stage: build_bin
+  image:
+    name: $LINUX_BUILDER_IMAGE
+  variables:
+    RELEASE_NAME: ""
+    ZIP_NAME: ""
+  <<: *semver_tag_rules
+  script:
+    - cd corev-llvm-project
+    - mkdir build && cd build
+    # Build
+    - |
+      cmake -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$CI_PROJECT_DIR/$RELEASE_NAME" \
+        -DLLVM_ENABLE_PROJECTS="clang;lld" \
+        -DLLVM_TARGETS_TO_BUILD="RISCV" \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DLLVM_ENABLE_PIC=OFF \
+        -DLLVM_INCLUDE_TESTS=OFF \
+        -DCLANG_INCLUDE_TESTS=OFF \
+        -DLLVM_INCLUDE_BENCHMARKS=OFF \
+        -DLLVM_ENABLE_TERMINFO=OFF \
+        -DLLVM_ENABLE_ZSTD=OFF \
+        ${CMAKE_CROSS_FLAGS} \
+        ../llvm
+    - ninja clang lld clang-format llvm-ar llvm-nm llvm-objdump llvm-strip llvm-cov
+    - ninja install
+    # Package and upload
+    - cd $CI_PROJECT_DIR
+    - zip -r $ZIP_NAME $RELEASE_NAME
+    - |
+      CURL_RES="$(curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "./$ZIP_NAME" ${PACKAGE_REGISTRY_URL}/${ZIP_NAME})"
+    - echo "$CURL_RES"
+    - test "$CURL_RES" == '{"message":"201 Created"}'
+  artifacts:
+    paths:
+      - $ZIP_NAME
+    expire_in: 1 week
+    when: always
+  dependencies:
+    - clone_tc
+  tags:
+    - docker
+
+linux_x64:build:
+  extends: .build
+  variables:
+    RELEASE_NAME: "$LINUX_X64_RELEASE_NAME"
+    ZIP_NAME: "$LINUX_X64_ARCHIVE_NAME"
+
+linux_riscv64:build:
+  extends: .build
+  variables:
+    RELEASE_NAME: "$LINUX_RISCV64_RELEASE_NAME"
+    ZIP_NAME: "$LINUX_RISCV64_ARCHIVE_NAME"
+    # Inject standard CMake Linux Cross-Compilation flags
+    CMAKE_CROSS_FLAGS: >
+      -DCMAKE_SYSTEM_NAME=Linux
+      -DCMAKE_SYSTEM_PROCESSOR=riscv64
+      -DCMAKE_C_COMPILER=riscv64-linux-gnu-gcc
+      -DCMAKE_CXX_COMPILER=riscv64-linux-gnu-g++
+
+win_x64:build:
+  extends: .build
+  image:
+    name: $WINDOWS_BUILDER_IMAGE
+  variables:
+    RELEASE_NAME: "$WIN_X64_RELEASE_NAME"
+    ZIP_NAME: "$WIN_X64_ARCHIVE_NAME"
+    # Inject standard CMake MinGW Cross-Compilation flags
+    CMAKE_CROSS_FLAGS: >
+      -DCMAKE_SYSTEM_NAME=Windows
+      -DCMAKE_SYSTEM_PROCESSOR=x86_64
+      -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc
+      -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+      -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres
+
+
+dockerbuild:
+  extends: .dockerbashlogin
+  stage: build_img
+  variables:
+    # GIT_* vars are necessary to trigger "git clean" before artifacts download
+    GIT_DEPTH: 1
+    GIT_STRATEGY: fetch
+  <<: *semver_tag_rules
+  script:
+    # Get linux x64 and riscv64 archives
+    - |
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "${PACKAGE_REGISTRY_URL}/${LINUX_X64_ARCHIVE_NAME}" -o "${LINUX_X64_ARCHIVE_NAME}"
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "${PACKAGE_REGISTRY_URL}/${LINUX_RISCV64_ARCHIVE_NAME}" -o "${LINUX_RISCV64_ARCHIVE_NAME}"
+    # Unzip into linux_amd64 and linux_riscv64
+    - mkdir -p linux_amd64 linux_riscv64
+    - unzip -d linux_amd64 "${LINUX_X64_ARCHIVE_NAME}"
+    - unzip -d linux_riscv64 "${LINUX_RISCV64_ARCHIVE_NAME}"
+    # Build multi-arch docker image
+    - docker buildx bake release
+
+
+release:
+  stage: release
+  image: $RELEASE_IMAGE
+  variables:
+    GIT_STRATEGY: none
+    RELEASE_TITLE: "RiscV GNU Toolchain ${CI_COMMIT_TAG} (from PULP)"
+  <<: *semver_tag_rules
+  script:
+    - |
+      echo "Creating release: ${RELEASE_TITLE}"
+  release:
+    tag_name: '$CI_COMMIT_TAG'
+    description: '# ${RELEASE_TITLE}'
+    assets:
+      links:
+        - name: '${LINUX_X64_RELEASE_NAME}.zip'
+          url: '${PACKAGE_REGISTRY_URL}/${LINUX_X64_RELEASE_NAME}.zip'
+          filepath: '/binaries/linuxx64'
+          link_type: 'package'
+        - name: '${LINUX_RISCV64_RELEASE_NAME}.zip'
+          url: '${PACKAGE_REGISTRY_URL}/${LINUX_RISCV64_RELEASE_NAME}.zip'
+          filepath: '/binaries/linux_riscv64'
+          link_type: 'package'
+        - name: '${WIN_X64_RELEASE_NAME}.zip'
+          url: '${PACKAGE_REGISTRY_URL}/${WIN_X64_RELEASE_NAME}.zip'
+          filepath: '/binaries/winx64'
+          link_type: 'package'
+  dependencies: []
+  tags:
+    - docker
+
+
+github_release:
+  stage: release
+  image:
+    name: alpine:latest
+  <<: *semver_tag_rules
+  before_script:
+    - apk add --no-cache github-cli git curl openssh-client
+  script:
+    - echo "Publishing release ${CI_COMMIT_TAG} to GitHub..."
+    # Loop until the tag exists on the remote (Timeout after ~2 minutes)
+    - |
+      set -x
+      MODE=""
+      for i in $(seq 1 24); do
+        echo "Attempt $i: Checking for tag on GitHub..."
+        if gh release view "${CI_COMMIT_TAG}" --repo "https://github.com/${EGG_GH_ORG}/${CI_PROJECT_NAME}" >/dev/null 2>&1; then
+          echo "Release already exists (idempotency check). Updating assets..."
+          MODE="upload"
+          break
+        elif gh api "repos/${EGG_GH_ORG}/${CI_PROJECT_NAME}/git/ref/tags/${CI_COMMIT_TAG}" >/dev/null 2>&1; then
+          echo "Tag found on GitHub!"
+          MODE="create"
+          break
+        fi
+        echo "Tag not found yet. Sleeping 5s..."
+        sleep 5
+      done
+      set +x
+    # Safety check
+    - if [ -z "$MODE" ]; then echo "Error -> Tag sync timed out."; exit 1; fi
+    # Execute: Create or Edit
+    - |
+      if [ "$MODE" = "create" ]; then
+        echo "Creating new release..."
+        gh release create "${CI_COMMIT_TAG}" \
+          ./*.zip \
+          --repo "https://github.com/${EGG_GH_ORG}/${CI_PROJECT_NAME}" \
+          --title "Release ${CI_COMMIT_TAG}" \
+          --generate-notes
+      else
+        echo "Uploading to existing release..."
+        gh release upload "${CI_COMMIT_TAG}" \
+          ./*.zip \
+          --repo "https://github.com/${EGG_GH_ORG}/${CI_PROJECT_NAME}" \
+          --clobber
+      fi
+  dependencies:
+    - linux_x64:build
+    - linux_riscv64:build
+    - win_x64:build
+  tags:
+    - docker
