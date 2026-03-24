@@ -130,8 +130,10 @@ clone_tc:
         ../llvm
     - ninja clang lld clang-format llvm-ar llvm-nm llvm-objdump llvm-strip llvm-cov
     - ninja install
-    # Package and upload
+    # Copy LICENSE and CONTRIBUTING
     - cd $CI_PROJECT_DIR
+    - cp corev-llvm-project/LICENSE.txt cp corev-llvm-project/CONTRIBUTING.md "${CI_PROJECT_DIR}/$RELEASE_NAME/" 2>/dev/null || true
+    # Package and upload
     - zip -r $ZIP_NAME $RELEASE_NAME
     - |
       CURL_RES="$(curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "./$ZIP_NAME" ${PACKAGE_REGISTRY_URL}/${ZIP_NAME})"
