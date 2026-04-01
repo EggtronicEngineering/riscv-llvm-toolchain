@@ -5,8 +5,8 @@ variables:
   GIT_SUBMODULE_FORCE_HTTPS: "true"
   DOCKER_DRIVER: overlay2
 
-  LLVM_REPO: "https://github.com/openhwgroup/corev-llvm-project.git"
-  TOOLCHAIN_REF: "development"
+  LLVM_REPO: "https://github.com/EggtronicEngineering/llvm-project.git"
+  TOOLCHAIN_REF: "clang"
 
   DOCKER_REPO: "eggtronicengineering/riscv-llvm-toolchain"
   LINUX_BUILDER_IMAGE: "${DOCKER_REPO}:linux-builder"
@@ -85,7 +85,7 @@ clone_tc:
   script:
     # Defensive cleanup: Wipe out any leftover folders from previous failed retries (needed because of `GIT_STRATEGY: none`)
     - rm -rf llvm-project
-    # Clone OpenHW LLVM
+    # Clone Target LLVM
     - git clone --single-branch --branch $TOOLCHAIN_REF $LLVM_REPO llvm-project
     # Cleanup git metadata to save CI artifact space
     - rm -rf llvm-project/.git
@@ -129,7 +129,7 @@ clone_tc:
     - ninja install
     # Copy LICENSE and CONTRIBUTING
     - cd $CI_PROJECT_DIR
-    - cp corev-llvm-project/LICENSE.txt cp corev-llvm-project/CONTRIBUTING.md "${CI_PROJECT_DIR}/$RELEASE_NAME/" 2>/dev/null || true
+    - cp llvm-project/LICENSE.txt cp llvm-project/CONTRIBUTING.md "${CI_PROJECT_DIR}/$RELEASE_NAME/" 2>/dev/null || true
     # Package and upload
     - zip -r $ZIP_NAME $RELEASE_NAME
     - |
