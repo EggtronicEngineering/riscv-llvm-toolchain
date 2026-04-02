@@ -86,9 +86,9 @@ clone_tc:
     # Defensive cleanup: Wipe out any leftover folders from previous failed retries (needed because of `GIT_STRATEGY: none`)
     - rm -rf llvm-project
     # Clone Target LLVM
-    - git clone --single-branch --branch $TOOLCHAIN_REF $LLVM_REPO llvm-project
+    - git clone --depth 1 --single-branch --branch $TOOLCHAIN_REF $LLVM_REPO llvm-project
     # Cleanup git metadata to save CI artifact space
-    - rm -rf llvm-project/.git
+    # - rm -rf llvm-project/.git
   artifacts:
     paths:
       - llvm-project
