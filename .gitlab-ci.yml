@@ -9,7 +9,8 @@ variables:
   TOOLCHAIN_REF: "clang"
 
   DOCKER_REPO: "eggtronicengineering/riscv-llvm-toolchain"
-  LINUX_BUILDER_IMAGE: "${DOCKER_REPO}:linux-builder"
+  X64_BUILDER_IMAGE: "${DOCKER_REPO}:x64-builder"
+  RISCV64_BUILDER_IMAGE: "${DOCKER_REPO}:riscv64-builder"
   RELEASE_IMAGE: "registry.gitlab.com/gitlab-org/release-cli:latest"
 
   PROJECT_API_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}"
@@ -78,7 +79,7 @@ setup:
 clone_tc:
   stage: setup
   image:
-    name: $LINUX_BUILDER_IMAGE
+    name: $X64_BUILDER_IMAGE
   variables:
     GIT_STRATEGY: none
   <<: *semver_tag_rules
@@ -100,8 +101,6 @@ clone_tc:
 
 .build:
   stage: build_bin
-  image:
-    name: $LINUX_BUILDER_IMAGE
   variables:
     RELEASE_NAME: ""
     ZIP_NAME: ""
@@ -123,13 +122,13 @@ clone_tc:
         -DLLVM_INCLUDE_BENCHMARKS=OFF \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_ENABLE_ZSTD=OFF \
-        ${CMAKE_CROSS_FLAGS} \
+        ${CMAKE_EXTRA_FLAGS} \
         ../llvm
     - ninja clang lld clang-format llvm-ar llvm-nm llvm-objdump llvm-strip llvm-cov
     - ninja install
     # Copy LICENSE and CONTRIBUTING
     - cd $CI_PROJECT_DIR
-    - cp llvm-project/LICENSE.txt cp llvm-project/CONTRIBUTING.md "${CI_PROJECT_DIR}/$RELEASE_NAME/" 2>/dev/null || true
+    - cp llvm-project/LICENSE.txt llvm-project/CONTRIBUTING.md "${CI_PROJECT_DIR}/$RELEASE_NAME/" 2>/dev/null || true
     # Package and upload
     - zip -r $ZIP_NAME $RELEASE_NAME
     - |
@@ -146,36 +145,52 @@ clone_tc:
   tags:
     - docker
 
-linux_x64:build:
+.build_x64:
   extends: .build
+  image:
+    name: $X64_BUILDER_IMAGE
+
+.build_riscv64:
+  extends: .build
+  image:
+    name: $RISCV64_BUILDER_IMAGE
+
+linux_x64:build:
+  extends: .build_x64
   variables:
     RELEASE_NAME: "$LINUX_X64_RELEASE_NAME"
     ZIP_NAME: "$LINUX_X64_ARCHIVE_NAME"
+    # Inject static linking
+    CMAKE_EXTRA_FLAGS: >
+      -DLLVM_BUILD_STATIC=ON
+      -DCMAKE_EXE_LINKER_FLAGS="-static"
 
 linux_riscv64:build:
-  extends: .build
+  extends: .build_riscv64
   variables:
     RELEASE_NAME: "$LINUX_RISCV64_RELEASE_NAME"
     ZIP_NAME: "$LINUX_RISCV64_ARCHIVE_NAME"
     # Inject standard CMake Linux Cross-Compilation flags
-    CMAKE_CROSS_FLAGS: >
+    CMAKE_EXTRA_FLAGS: >
       -DCMAKE_SYSTEM_NAME=Linux
       -DCMAKE_SYSTEM_PROCESSOR=riscv64
       -DCMAKE_C_COMPILER=riscv64-linux-gnu-gcc
       -DCMAKE_CXX_COMPILER=riscv64-linux-gnu-g++
 
 win_x64:build:
-  extends: .build
+  extends: .build_x64
   variables:
     RELEASE_NAME: "$WIN_X64_RELEASE_NAME"
     ZIP_NAME: "$WIN_X64_ARCHIVE_NAME"
-    # Inject standard CMake MinGW Cross-Compilation flags
-    CMAKE_CROSS_FLAGS: >
+    # Inject standard CMake MinGW Cross-Compilation flags + static linking
+    CMAKE_EXTRA_FLAGS: >
       -DCMAKE_SYSTEM_NAME=Windows
       -DCMAKE_SYSTEM_PROCESSOR=x86_64
-      -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc-posix
-      -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++-posix
+      -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc
+      -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
       -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres
+      -DLLVM_BUILD_STATIC=ON
+      -DCMAKE_EXE_LINKER_FLAGS="-static"
 
 
 dockerbuild:

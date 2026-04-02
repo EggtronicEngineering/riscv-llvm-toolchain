@@ -1,0 +1,31 @@
+FROM alpine:latest
+
+ENV CI=true
+
+# Alpine uses apk for package management
+RUN apk update && apk add --no-cache \
+        # Core build tools
+        git \
+        build-base \
+        cmake \
+        ninja \
+        python3 \
+        linux-headers \
+        # Static library dependencies for LLVM
+        zlib-static \
+        zlib-dev \
+        ncurses-static \
+        ncurses-dev \
+        # Standard utilities
+        curl \
+        wget \
+        bash \
+        jq \
+        zip \
+        unzip \
+        # Windows cross-compilation toolchain
+        mingw-w64-gcc \
+        mingw-w64-crt \
+        mingw-w64-headers \
+        mingw-w64-winpthreads \
+    && rm -rf /var/cache/apk/*

@@ -21,8 +21,6 @@ RUN apt-get update && apt-get -y install --no-install-recommends \
         curl \
         zip \
         unzip \
-        # Windows cross-compilation toolchain
-        mingw-w64 \
         # RISC-V cross-compilation toolchain
         crossbuild-essential-riscv64 \
     && apt clean && rm -rf /var/lib/apt/lists/*

@@ -1,24 +1,33 @@
 # Variables injected from CI
 variable "DOCKER_REPO" {}
-variable "LINUX_BUILDER_IMAGE" {}
-variable "WINDOWS_BUILDER_IMAGE" {}
+variable "X64_BUILDER_IMAGE" {}
+variable "RISCV64_BUILDER_IMAGE" {}
 variable "CI_COMMIT_TAG" {}
 
 group "builders" {
-  targets = ["linux-builder"]
+  targets = ["x64-builder", "riscv64-builder"]
 }
 
 group "release" {
   targets = ["toolchain-release"]
 }
 
-target "linux-builder" {
+target "x64-builder" {
   context = "docker/builders"
-  dockerfile = "Dockerfile.linux-builder"
+  dockerfile = "Dockerfile.x64-builder"
   output = ["type=registry"]
-  tags = ["${LINUX_BUILDER_IMAGE}"]
-  cache-from = ["type=registry,ref=${LINUX_BUILDER_IMAGE}-cache"]
-  cache-to   = ["type=registry,ref=${LINUX_BUILDER_IMAGE}-cache,mode=max"]
+  tags = ["${X64_BUILDER_IMAGE}"]
+  cache-from = ["type=registry,ref=${X64_BUILDER_IMAGE}-cache"]
+  cache-to   = ["type=registry,ref=${X64_BUILDER_IMAGE}-cache,mode=max"]
+}
+
+target "riscv64-builder" {
+  context = "docker/builders"
+  dockerfile = "Dockerfile.riscv64-builder"
+  output = ["type=registry"]
+  tags = ["${RISCV64_BUILDER_IMAGE}"]
+  cache-from = ["type=registry,ref=${RISCV64_BUILDER_IMAGE}-cache"]
+  cache-to   = ["type=registry,ref=${RISCV64_BUILDER_IMAGE}-cache,mode=max"]
 }
 
 target "toolchain-release" {
