@@ -6,7 +6,7 @@ variables:
   DOCKER_DRIVER: overlay2
 
   LLVM_REPO: "https://github.com/EggtronicEngineering/llvm-project.git"
-  TOOLCHAIN_REF: "clang"
+  TOOLCHAIN_REF: "xcv_support"
 
   DOCKER_REPO: "eggtronicengineering/riscv-llvm-toolchain"
   X64_BUILDER_IMAGE: "${DOCKER_REPO}:x64-builder"
