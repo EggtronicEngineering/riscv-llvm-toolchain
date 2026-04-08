@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 ARG TARGETARCH
-ARG INSTALL_DIR=/opt/riscv
+ARG INSTALL_DIR=/opt/llvm-riscv
 
 # Install deps
 RUN apt update && apt -y full-upgrade && apt -y install \

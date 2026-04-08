@@ -207,10 +207,12 @@ dockerbuild:
     - |
       curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "${PACKAGE_REGISTRY_URL}/${LINUX_X64_ARCHIVE_NAME}" -o "${LINUX_X64_ARCHIVE_NAME}"
       curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "${PACKAGE_REGISTRY_URL}/${LINUX_RISCV64_ARCHIVE_NAME}" -o "${LINUX_RISCV64_ARCHIVE_NAME}"
-    # Unzip into linux_amd64 and linux_riscv64
-    - mkdir -p linux_amd64 linux_riscv64
-    - unzip -d linux_amd64 "${LINUX_X64_ARCHIVE_NAME}"
-    - unzip -d linux_riscv64 "${LINUX_RISCV64_ARCHIVE_NAME}"
+    # Unzip the archives
+    - unzip "${LINUX_X64_ARCHIVE_NAME}"
+    - unzip "${LINUX_RISCV64_ARCHIVE_NAME}"
+    # Rename extracted folders to match what Dockerfile expects (e.g. linux_amd64, linux_riscv64)
+    - mv "${LINUX_X64_RELEASE_NAME}" linux_amd64
+    - mv "${LINUX_RISCV64_RELEASE_NAME}" linux_riscv64
     # Build multi-arch docker image
     - docker buildx bake release
 
