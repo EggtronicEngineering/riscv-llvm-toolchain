@@ -5,12 +5,23 @@ ARG INSTALL_DIR=/opt/riscv
 
 # Install deps
 RUN apt update && apt -y full-upgrade && apt -y install \
-        make \
         libmpc3 \
         libmpfr6 \
         libgmp10 \
         zlib1g \
         libexpat1 \
+        libxml2-dev \
+        git \
+        zip \
+        unzip \
+        wget \
+        curl \
+        xz-utils \
+        jq \
+        build-essential \
+        cmake \
+        meson \
+        ninja-build \
     && apt clean && rm -rf /var/lib/apt/lists/*
 
 # Install toolchain
